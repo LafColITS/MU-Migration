@@ -257,11 +257,12 @@ class ImportCommand extends MUMigrationBase {
 			),
 			$args,
 			array(
-				'blog_id'    => '',
-				'old_url'    => '',
-				'new_url'    => '',
-				'old_prefix' => $wpdb->prefix,
-				'new_prefix' => '',
+				'blog_id'         => '',
+				'old_url'         => '',
+				'new_url'         => '',
+				'old_prefix'      => $wpdb->prefix,
+				'new_prefix'      => '',
+				'new_upload_path' => '',
 			),
 			$assoc_args
 		);
@@ -305,6 +306,19 @@ class ImportCommand extends MUMigrationBase {
 				$old_url = Helpers\parse_url_for_search_replace( $this->assoc_args['old_url'] );
 				$new_url = Helpers\parse_url_for_search_replace( $this->assoc_args['new_url'] );
 
+				// Restore the upload path.
+				\WP_CLI::launch_self(
+					'option update',
+					array(
+						'upload_path',
+						$this->assoc_args['new_upload_path'],
+					),
+					array(),
+					false,
+					false,
+					array( 'url' => $new_url )
+				);
+
 				$search_replace = \WP_CLI::launch_self(
 					'search-replace',
 					array(
@@ -323,16 +337,24 @@ class ImportCommand extends MUMigrationBase {
 
 				$this->log( __( 'Running Search and Replace for uploads paths', 'mu-migration' ), $verbose );
 
-				$from = $to = 'wp-content/uploads';
+				$fromfull = \WP_CLI::launch_self(
+					'option get',
+					array(
+						'upload_path',
+					),
+					array(),
+					false,
+					false,
+					array( 'url' => $new_url )
+				);
+				preg_match( '/([A-Za-z-/\.]+/[0-9]+/.*/', $fromfull, $matches );
+				$from = $matches[1];
+				$to = $this->assoc_args['new_upload_path'];
 
 				if ( $this->assoc_args['original_blog_id'] > 1 ) {
-					$from = 'wp-content/uploads/sites/' . (int) $this->assoc_args['original_blog_id'];
+					$from = $from . (int) $this->assoc_args['original_blog_id'];
 				}
 
-				if ( $this->assoc_args['blog_id'] > 1 ) {
-					$to = 'wp-content/uploads/sites/' . (int) $this->assoc_args['blog_id'];
-				}
-				
 				if ( $from && $to ) {
 					$search_replace = \WP_CLI::launch_self(
 						'search-replace',
@@ -465,11 +487,23 @@ class ImportCommand extends MUMigrationBase {
 			WP_CLI::error( __( 'Unable to create new site', 'mu-migration' ) );
 		}
 
+		$new_upload_path = \WP_CLI::launch_self(
+			'option get',
+			array(
+				'upload_path',
+			),
+			array(),
+			false,
+			false,
+			array( 'url' => $new_url )
+		);
+
 		$tables_assoc_args = array(
 			'blog_id'          => $blog_id,
 			'original_blog_id' => $site_meta_data->blog_id,
 			'old_prefix'       => $site_meta_data->db_prefix,
 			'new_prefix'       => Helpers\get_db_prefix( $blog_id ),
+                        'new_upload_path'  => $new_upload_path,
 		);
 
 		/*
@@ -568,8 +602,8 @@ class ImportCommand extends MUMigrationBase {
 			foreach ( $plugins as $plugin_name => $plugin ) {
 				$plugin_folder = dirname( $plugin_name );
 				$fullPluginPath = $plugins_dir . '/' . $plugin_folder;
-				
-				if ( $check_plugins &&  ! in_array( $plugin_name, $blog_plugins, true ) && 
+
+				if ( $check_plugins &&  ! in_array( $plugin_name, $blog_plugins, true ) &&
 					! in_array( $plugin_name, $network_plugins, true ) ) {
 					continue;
 				}
