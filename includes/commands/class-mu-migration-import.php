@@ -615,7 +615,7 @@ class ImportCommand extends MUMigrationBase {
 				$plugin_folder = dirname( $plugin_name );
 				$fullPluginPath = $plugins_dir . '/' . $plugin_folder;
 
-				if ( $check_plugins &&  ! in_array( $plugin_name, $blog_plugins, true ) &&
+				if ( $check_plugins &&  ! in_array( $plugin_name, $blog_plugins, true ) && 
 					! in_array( $plugin_name, $network_plugins, true ) ) {
 					continue;
 				}
