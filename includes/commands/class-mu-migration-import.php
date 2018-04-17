@@ -1,7 +1,7 @@
 <?php
 /**
-* @package TenUp\MU_Migration
-*/
+ * @package TenUp\MU_Migration
+ */
 namespace TenUp\MU_Migration\Commands;
 
 use TenUp\MU_Migration\Helpers;
@@ -11,26 +11,26 @@ use Alchemy\Zippy\Zippy;
 class ImportCommand extends MUMigrationBase {
 
 	/**
-	* Imports all users from .csv file.
-	*
-	* This command will create a map file containing the new user_id for each user, we do this because with this map file
-	* we can update the post_author of all posts with the corresponding new user ID.
-	*
-	* ## OPTIONS
-	*
-	* <inputfile>
-	* : The name of the exported .csv file
-	*
-	* ## EXAMPLES
-	*
-	*   wp mu-migration import users users.csv --map_file=ids_maps.json
-	*
-	* @synopsis <inputfile> --map_file=<map> [--blog_id=<blog_id>]
-	*
-	* @param array $args
-	* @param array $assoc_args
-	* @param bool  $verbose
-	*/
+	 * Imports all users from .csv file.
+	 *
+	 * This command will create a map file containing the new user_id for each user, we do this because with this map file
+	 * we can update the post_author of all posts with the corresponding new user ID.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <inputfile>
+	 * : The name of the exported .csv file
+	 *
+	 * ## EXAMPLES
+	 *
+	 *   wp mu-migration import users users.csv --map_file=ids_maps.json
+	 *
+	 * @synopsis <inputfile> --map_file=<map> [--blog_id=<blog_id>]
+	 *
+	 * @param array $args
+	 * @param array $assoc_args
+	 * @param bool  $verbose
+	 */
 	public function users( $args = array(), $assoc_args = array(), $verbose = true ) {
 		global $wpdb;
 
@@ -60,13 +60,13 @@ class ImportCommand extends MUMigrationBase {
 		$delimiter = ',';
 
 		/**
-		* This array will hold the new id for each old id.
-		*
-		* Example:
-		*    array(
-		*      'OLD_ID' => 'NEW_ID'
-		*    );
-		*/
+		 * This array will hold the new id for each old id.
+		 *
+		 * Example:
+		 *    array(
+		 *      'OLD_ID' => 'NEW_ID'
+		 *    );
+		 */
 		$ids_maps       = array();
 		$labels         = array();
 		$count          = 0;
@@ -97,594 +97,594 @@ class ImportCommand extends MUMigrationBase {
 						"SELECT ID FROM {$wpdb->users} WHERE user_login = %s OR (user_email = %s AND user_email != '');",
 						$user_data['user_login'],
 						$user_data['user_email']
-						)
-					);
+					)
+				);
 
-					$user_exists = $user_exists ? $user_exists[0] : false;
+				$user_exists = $user_exists ? $user_exists[0] : false;
 
-					if ( ! $user_exists ) {
+				if ( ! $user_exists ) {
 
-						/*
-						* wp_insert_users accepts only the default user meta keys.
-						*/
-						$default_user_data = array();
-						foreach ( ExportCommand::getCSVHeaders() as $key ) {
-							if ( isset( $user_data[ $key ] ) ) {
-								$default_user_data[ $key ] = $user_data[ $key ];
+					/*
+					 * wp_insert_users accepts only the default user meta keys.
+					 */
+					$default_user_data = array();
+					foreach ( ExportCommand::getCSVHeaders() as $key ) {
+						if ( isset( $user_data[ $key ] ) ) {
+							$default_user_data[ $key ] = $user_data[ $key ];
+						}
+					}
+
+					// All custom user meta data.
+					$user_meta_data = array_diff_assoc( $user_data, $default_user_data );
+
+					$new_id = wp_insert_user( $default_user_data );
+
+					if ( ! is_wp_error( $new_id ) ) {
+						$wpdb->update( $wpdb->users, array( 'user_pass' => $user_data['user_pass'] ), array( 'ID' => $new_id ) );
+
+						$user = new \WP_User( $new_id );
+
+						//Inserts all custom meta data
+						foreach ( $user_meta_data as $meta_key => $meta_value ) {
+							update_user_meta( $new_id, $meta_key, maybe_unserialize( $meta_value ) );
+						}
+
+						/**
+						 * Fires before exporting the custom user data.
+						 *
+						 * @since 0.1.0
+						 *
+						 * @param array    $user_data The $user_data array.
+						 * @param \WP_User $user      The user object.
+						 */
+						do_action( 'mu_migration/import/user/custom_data_before', $user_data, $user );
+
+						/**
+						 * Filters the default set of user data to be exported/imported.
+						 *
+						 * @since 0.1.0
+						 *
+						 * @param array
+						 * @param \WP_User $user The user object.
+						 */
+						$custom_user_data = apply_filters( 'mu_migration/export/user/data', array(), $user );
+
+						if ( ! empty( $custom_user_data ) ) {
+							foreach ( $custom_user_data as $meta_key => $meta_value ) {
+								if ( isset( $user_data[ $meta_key ] ) ) {
+									update_user_meta( $new_id, $meta_key, sanitize_text_field( $meta_value ) );
+								}
 							}
 						}
 
-						// All custom user meta data.
-						$user_meta_data = array_diff_assoc( $user_data, $default_user_data );
+						/**
+						 * Fires after exporting the custom user data.
+						 *
+						 * @since 0.1.0
+						 *
+						 * @param array    $user_data The $user_data array.
+						 * @param \WP_User $user      The user object.
+						 */
+						do_action( 'mu_migration/import/user/custom_data_after', $user_data, $user );
 
-						$new_id = wp_insert_user( $default_user_data );
-
-						if ( ! is_wp_error( $new_id ) ) {
-							$wpdb->update( $wpdb->users, array( 'user_pass' => $user_data['user_pass'] ), array( 'ID' => $new_id ) );
-
-							$user = new \WP_User( $new_id );
-
-							//Inserts all custom meta data
-							foreach ( $user_meta_data as $meta_key => $meta_value ) {
-								update_user_meta( $new_id, $meta_key, maybe_unserialize( $meta_value ) );
-							}
-
-							/**
-							* Fires before exporting the custom user data.
-							*
-							* @since 0.1.0
-							*
-							* @param array    $user_data The $user_data array.
-							* @param \WP_User $user      The user object.
-							*/
-							do_action( 'mu_migration/import/user/custom_data_before', $user_data, $user );
-
-							/**
-							* Filters the default set of user data to be exported/imported.
-							*
-							* @since 0.1.0
-							*
-							* @param array
-							* @param \WP_User $user The user object.
-							*/
-							$custom_user_data = apply_filters( 'mu_migration/export/user/data', array(), $user );
-
-							if ( ! empty( $custom_user_data ) ) {
-								foreach ( $custom_user_data as $meta_key => $meta_value ) {
-									if ( isset( $user_data[ $meta_key ] ) ) {
-										update_user_meta( $new_id, $meta_key, sanitize_text_field( $meta_value ) );
-									}
-								}
-							}
-
-							/**
-							* Fires after exporting the custom user data.
-							*
-							* @since 0.1.0
-							*
-							* @param array    $user_data The $user_data array.
-							* @param \WP_User $user      The user object.
-							*/
-							do_action( 'mu_migration/import/user/custom_data_after', $user_data, $user );
-
-							$count++;
-							$ids_maps[ $old_id ] = $new_id;
-							if ( $is_multisite ) {
-								Helpers\light_add_user_to_blog( $this->assoc_args['blog_id'], $new_id, $user_data['role'] );
-							}
-						} else {
-							$this->warning( sprintf(
-								__( 'An error has occurred when inserting %s: %s.', 'mu-migration' ),
-								$user_data['user_login'],
-								implode( ', ', $new_id->get_error_messages() )
-							), $verbose );
+						$count++;
+						$ids_maps[ $old_id ] = $new_id;
+						if ( $is_multisite ) {
+							Helpers\light_add_user_to_blog( $this->assoc_args['blog_id'], $new_id, $user_data['role'] );
 						}
 					} else {
 						$this->warning( sprintf(
-							__( '%s exists, using his ID (%d)...', 'mu-migration' ),
+							__( 'An error has occurred when inserting %s: %s.', 'mu-migration' ),
 							$user_data['user_login'],
-							$user_exists
+							implode( ', ', $new_id->get_error_messages() )
 						), $verbose );
-
-						$existing_users++;
-						$ids_maps[ $old_id ] = $user_exists;
-						if ( $is_multisite ) {
-							Helpers\light_add_user_to_blog( $this->assoc_args['blog_id'], $user_exists, $user_data['role'] );
-						}
 					}
-
-					unset( $user_exists );
-					unset( $user_data );
-					unset( $data );
-				}
-
-				wp_suspend_cache_addition( false );
-
-				Helpers\maybe_restore_current_blog();
-
-				if ( ! empty( $ids_maps ) ) {
-					// Saving the ids_maps to a file.
-					$output_file_handler = fopen( $this->assoc_args['map_file'], 'w+' );
-					fwrite( $output_file_handler, json_encode( $ids_maps ) );
-					fclose( $output_file_handler );
-
-					$this->success( sprintf(
-						__( 'A map file has been created: %s', 'mu-migration' ),
-						$this->assoc_args['map_file']
+				} else {
+					$this->warning( sprintf(
+						__( '%s exists, using his ID (%d)...', 'mu-migration' ),
+						$user_data['user_login'],
+						$user_exists
 					), $verbose );
+
+					$existing_users++;
+					$ids_maps[ $old_id ] = $user_exists;
+					if ( $is_multisite ) {
+						Helpers\light_add_user_to_blog( $this->assoc_args['blog_id'], $user_exists, $user_data['role'] );
+					}
 				}
+
+				unset( $user_exists );
+				unset( $user_data );
+				unset( $data );
+			}
+
+			wp_suspend_cache_addition( false );
+
+			Helpers\maybe_restore_current_blog();
+
+			if ( ! empty( $ids_maps ) ) {
+				// Saving the ids_maps to a file.
+				$output_file_handler = fopen( $this->assoc_args['map_file'], 'w+' );
+				fwrite( $output_file_handler, json_encode( $ids_maps ) );
+				fclose( $output_file_handler );
 
 				$this->success( sprintf(
-					__( '%d users have been imported and %d users already existed', 'mu-migration' ),
-					absint( $count ),
-					absint( $existing_users )
+					__( 'A map file has been created: %s', 'mu-migration' ),
+					$this->assoc_args['map_file']
 				), $verbose );
-			} else {
-				WP_CLI::error( sprintf(
-					__( 'Can not read the file %s', 'mu-migration' ),
-					$filename
-					) );
-				}
 			}
 
-			/**
-			* Imports the tables from a single site instance.
-			*
-			* This command will perform the search-replace as well as
-			* the necessary updates to make the new tables work with multisite.
-			*
-			* ## OPTIONS
-			*
-			* <inputfile>
-			* : The name of the exported .sql file
-			*
-			* ## EXAMPLES
-			*
-			*   wp mu-migration import tables site.sql --old_prefix=wp_ --old_url=old_domain.com --new_url=new_domain.com
-			*
-			* @synopsis <inputfile> --blog_id=<blog_id> --old_prefix=<old> --new_prefix=<new> [--original_blog_id=<ID>] [--old_url=<olddomain>] [--new_url=<newdomain>]
-			*
-			* @param array $args
-			* @param array $assoc_args
-			* @param bool  $verbose
-			*/
-			public function tables( $args = array(), $assoc_args = array(), $verbose = true ) {
-				global $wpdb;
+			$this->success( sprintf(
+				__( '%d users have been imported and %d users already existed', 'mu-migration' ),
+				absint( $count ),
+				absint( $existing_users )
+			), $verbose );
+		} else {
+			WP_CLI::error( sprintf(
+				__( 'Can not read the file %s', 'mu-migration' ),
+				$filename
+			) );
+		}
+	}
 
-				$this->process_args(
+	/**
+	 * Imports the tables from a single site instance.
+	 *
+	 * This command will perform the search-replace as well as
+	 * the necessary updates to make the new tables work with multisite.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <inputfile>
+	 * : The name of the exported .sql file
+	 *
+	 * ## EXAMPLES
+	 *
+	 *   wp mu-migration import tables site.sql --old_prefix=wp_ --old_url=old_domain.com --new_url=new_domain.com
+	 *
+	 * @synopsis <inputfile> --blog_id=<blog_id> --old_prefix=<old> --new_prefix=<new> [--original_blog_id=<ID>] [--old_url=<olddomain>] [--new_url=<newdomain>]
+	 *
+	 * @param array $args
+	 * @param array $assoc_args
+	 * @param bool  $verbose
+	 */
+	public function tables( $args = array(), $assoc_args = array(), $verbose = true ) {
+		global $wpdb;
+
+		$this->process_args(
+			array(
+				0 => '', // .sql file to import.
+			),
+			$args,
+			array(
+				'blog_id'         	=> '',
+				'original_blog_id'	=> '',
+				'old_url'         	=> '',
+				'new_url'         	=> '',
+				'old_prefix'      	=> $wpdb->prefix,
+				'new_prefix'      	=> '',
+			),
+			$assoc_args
+		);
+
+		$is_multisite = is_multisite();
+
+		$filename = $this->args[0];
+
+		if ( empty( $filename ) || ! file_exists( $filename ) ) {
+			WP_CLI::error( __( 'Invalid input file', 'mu-migration' ) );
+		}
+
+		if ( empty( $this->assoc_args['blog_id'] ) ) {
+			WP_CLI::error( __( 'Please, provide a blog_id ', 'mu-migration' ) );
+		}
+
+		// Saving a few things before we do the db import.
+		Helpers\maybe_switch_to_blog( $this->assoc_args['blog_id'] );
+		$this->new_upload_paths = array(
+			'upload_path'			=> get_option( 'upload_path' ),
+			'upload_url_path' => get_option( 'upload_url_path' ),
+			'fileupload_url'	=> get_option( 'fileupload_url' ),
+			'upload_baseurl'	=> wp_get_upload_dir()['baseurl'],
+		);
+		Helpers\maybe_restore_current_blog();
+
+		// Terminates the script if sed is not installed.
+		$this->check_for_sed_presence( true );
+
+		// Replaces the db prefix and saves back the modifications to the sql file.
+		if ( ! empty( $this->assoc_args['new_prefix'] ) ) {
+			$this->replace_db_prefix( $filename, $this->assoc_args['old_prefix'], $this->assoc_args['new_prefix'] );
+		}
+
+		$import = \WP_CLI::launch_self(
+			'db import',
+			array( $filename ),
+			array(),
+			false,
+			false,
+			array()
+		);
+
+		if ( 0 === $import ) {
+			$this->log( __( 'Database imported', 'mu-migration' ), $verbose );
+
+			// Perform search and replace on url.
+			if ( ! empty( $this->assoc_args['old_url'] ) && ! empty( $this->assoc_args['new_url'] ) ) {
+				$this->log( __( 'Running search-replace', 'mu-migration' ), $verbose );
+
+				$old_url = Helpers\parse_url_for_search_replace( $this->assoc_args['old_url'] );
+				$new_url = Helpers\parse_url_for_search_replace( $this->assoc_args['new_url'] );
+
+				$search_replace = \WP_CLI::launch_self(
+					'search-replace',
 					array(
-						0 => '', // .sql file to import.
+						$old_url,
+						$new_url,
 					),
-					$args,
-					array(
-						'blog_id'         	=> '',
-						'original_blog_id'	=> '',
-						'old_url'         	=> '',
-						'new_url'         	=> '',
-						'old_prefix'      	=> $wpdb->prefix,
-						'new_prefix'      	=> '',
-					),
-					$assoc_args
-				);
-
-				$is_multisite = is_multisite();
-
-				$filename = $this->args[0];
-
-				if ( empty( $filename ) || ! file_exists( $filename ) ) {
-					WP_CLI::error( __( 'Invalid input file', 'mu-migration' ) );
-				}
-
-				if ( empty( $this->assoc_args['blog_id'] ) ) {
-					WP_CLI::error( __( 'Please, provide a blog_id ', 'mu-migration' ) );
-				}
-
-				// Saving a few things before we do the db import.
-        Helpers\maybe_switch_to_blog( $this->assoc_args['blog_id'] );
-        $this->new_upload_paths = array(
-					'upload_path' => get_option( 'upload_path' ),
-					'upload_url_path' => get_option( 'upload_url_path' ),
-					'fileupload_url' => get_option( 'fileupload_url' ),
-					'upload_baseurl' => wp_get_upload_dir()['baseurl'],
-				);
-        Helpers\maybe_restore_current_blog();
-
-				// Terminates the script if sed is not installed.
-				$this->check_for_sed_presence( true );
-
-				// Replaces the db prefix and saves back the modifications to the sql file.
-				if ( ! empty( $this->assoc_args['new_prefix'] ) ) {
-					$this->replace_db_prefix( $filename, $this->assoc_args['old_prefix'], $this->assoc_args['new_prefix'] );
-				}
-
-				$import = \WP_CLI::launch_self(
-					'db import',
-					array( $filename ),
 					array(),
 					false,
 					false,
-					array()
+					array( 'url' => $new_url )
 				);
 
-				if ( 0 === $import ) {
-					$this->log( __( 'Database imported', 'mu-migration' ), $verbose );
-
-					// Perform search and replace on url.
-					if ( ! empty( $this->assoc_args['old_url'] ) && ! empty( $this->assoc_args['new_url'] ) ) {
-						$this->log( __( 'Running search-replace', 'mu-migration' ), $verbose );
-
-						$old_url = Helpers\parse_url_for_search_replace( $this->assoc_args['old_url'] );
-						$new_url = Helpers\parse_url_for_search_replace( $this->assoc_args['new_url'] );
-
-						$search_replace = \WP_CLI::launch_self(
-							'search-replace',
-							array(
-								$old_url,
-								$new_url,
-							),
-							array(),
-							false,
-							false,
-							array( 'url' => $new_url )
-						);
-
-						if ( 0 === $search_replace ) {
-							$this->log( __( 'Search and Replace has been successfully executed', 'mu-migration' ), $verbose );
-						}
-					}
-
-					// Perform search and replace on upload paths.
-					$this->log( __( 'Running Search and Replace for uploads paths', 'mu-migration' ), $verbose );
-
-					$upload_path_options = array(
-						'upload_path',
-						'upload_url_path',
-						'fileupload_url'
-					);
-
-					$from = $this->get_old_upload_paths( $upload_path_options, $this->assoc_args['original_blog_id'], $this->assoc_args['blog_id'] );
-					$to = $this->get_new_upload_path( get_option( 'home' ), $this->assoc_args['blog_id'] );
-
-					if ( $from && $to ) {
-						$check = 0;
-						// Two step search and replace will prevent any weirdness if one of the from paths is a subset of the two path
-						foreach ( $from as $f ) {
-							$search_replace = \WP_CLI::launch_self(
-								'search-replace',
-								array( $f , "{{{mu-migration-upload-paths-placeholder}}}" ),
-								array(),
-								false,
-								false,
-								array( 'url' => $new_url )
-							);
-
-							$check += $search_replace;
-						}
-						$search_replace = \WP_CLI::launch_self(
-							'search-replace',
-							array( "{{{mu-migration-upload-paths-placeholder}}}", $to ),
-							array(),
-							false,
-							false,
-							array( 'url' => $new_url )
-						);
-						$check += $search_replace;
-						// Restore the upload path(s).
-						foreach ( $upload_path_options as $op ) {
-							$restore = \WP_CLI::launch_self(
-								'option update',
-								array(
-									$op,
-									$this->new_upload_paths[ $op ],
-								),
-								array(),
-								false,
-								false,
-								array( 'url' => $new_url )
-							);
-							$check += $restore;
-							$temp = $this->new_upload_paths[ $op ];
-						}
-						if ( 0 === $check ) {
-							$this->log( __( 'Uploads paths have been successfully updated as follows:', 'mu-migration' ), true );
-							foreach ( $from as $f ) {
-								$this->log( sprintf( __( '%s  ->  %s', 'mu-migration' ), $f, $to ), true );
-							}
-						}
-					}
-
-					Helpers\maybe_switch_to_blog( (int) $this->assoc_args['blog_id'] );
-
-					// Update the new tables to work properly with multisite.
-					$new_wp_roles_option_key = $wpdb->prefix . 'user_roles';
-					$old_wp_roles_option_key = $this->assoc_args['old_prefix'] . 'user_roles';
-
-					// Updating user_roles option key.
-					$wpdb->update(
-						$wpdb->options,
-						array(
-							'option_name' => $new_wp_roles_option_key,
-						),
-						array(
-							'option_name' => $old_wp_roles_option_key,
-						),
-						array(
-							'%s',
-						),
-						array(
-							'%s',
-						)
-					);
-
-					Helpers\maybe_restore_current_blog();
+				if ( 0 === $search_replace ) {
+					$this->log( __( 'Search and Replace has been successfully executed', 'mu-migration' ), $verbose );
 				}
 			}
 
-			/**
-			* Imports a new site into multisite from a zip package.
-			*
-			* ## OPTIONS
-			*
-			* <file>
-			* : The name of the exported .zip file
-			*
-			* ## EXAMPLES
-			*
-			*      wp mu-migration import all site.zip
-			*
-			* @synopsis <zipfile> [--blog_id=<blog_id>] [--new_url=<new_url>] [--verbose] [--mysql-single-transaction]
-			*
-			* @param array $args
-			* @param array $assoc_args
-			*/
-			public function all( $args = array(), $assoc_args = array() ) {
-				$this->process_args(
-					array(),
-					$args,
-					array(
-						'blog_id'                  => '',
-						'new_url'                  => '',
-						'mysql-single-transaction' => false,
-					),
-					$assoc_args
-				);
+			// Perform search and replace on upload paths.
+			$this->log( __( 'Running Search and Replace for uploads paths', 'mu-migration' ), $verbose );
 
-				$is_multisite = is_multisite();
+			$upload_path_options = array(
+				'upload_path',
+				'upload_url_path',
+				'fileupload_url'
+			);
 
-				$verbose = false;
+			$from = $this->get_old_upload_paths( $upload_path_options, $this->assoc_args['original_blog_id'], $this->assoc_args['blog_id'] );
+			$to = $this->get_new_upload_path( get_option( 'home' ), $this->assoc_args['blog_id'] );
 
-				if ( isset( $assoc_args['verbose'] ) ) {
-					$verbose = true;
-				}
-
-				$assoc_args = $this->assoc_args;
-
-				$filename = $this->args[0];
-
-				if ( ! Helpers\is_zip_file( $filename ) ) {
-					WP_CLI::error( __( 'The provided file does not appear to be a zip file', 'mu-migration' ) );
-				}
-
-				$temp_dir = 'mu-migration' . time() . '/';
-
-				WP_CLI::log( __( 'Extracting zip package...', 'mu-migration' ) );
-
-				/*
-				* Extract the file to the $temp_dir
-				*/
-				Helpers\extract( $filename, $temp_dir );
-
-				/*
-				* Looks for required (.json, .csv and .sql) files and for the optional folders
-				* that can live in the zip package (plugins, themes and uploads).
-				*/
-				$site_meta_data = glob( $temp_dir . '/*.json' );
-				$users          = glob( $temp_dir . '/*.csv' );
-				$sql            = glob( $temp_dir . '/*.sql' );
-				$plugins_folder = glob( $temp_dir . '/wp-content/plugins' );
-				$themes_folder  = glob( $temp_dir . '/wp-content/themes' );
-				$uploads_folder = glob( $temp_dir . '/wp-content/uploads' );
-
-				if ( empty( $site_meta_data ) || empty( $users ) || empty( $sql ) ) {
-					WP_CLI::error( __( "There's something wrong with your zip package, unable to find required files", 'mu-migration' ) );
-				}
-
-				$site_meta_data = json_decode( file_get_contents( $site_meta_data[0] ) );
-
-				$old_url = $site_meta_data->url;
-				$new_url = $old_url;
-
-				if ( ! empty( $assoc_args['new_url'] ) ) {
-					$site_meta_data->url = $assoc_args['new_url'];
-					$new_url = $assoc_args['new_url'];
-				}
-
-				if ( empty( $assoc_args['blog_id'] ) && $is_multisite ) {
-					$blog_id = $this->create_new_site( $site_meta_data );
-				} else if ( $is_multisite ) {
-					$blog_id = (int) $assoc_args['blog_id'];
-				} else {
-					$blog_id = 1;
-				}
-
-				if ( ! $blog_id ) {
-					WP_CLI::error( __( 'Unable to create new site', 'mu-migration' ) );
-				}
-
-				$tables_assoc_args = array(
-					'blog_id'          	=> $blog_id,
-					'original_blog_id' 	=> $site_meta_data->blog_id,
-					'old_prefix'       	=> $site_meta_data->db_prefix,
-					'new_prefix'       	=> Helpers\get_db_prefix( $blog_id ),
-				);
-
-				/*
-				* If changing URL, then set the proper params to force search-replace in the tables method.
-				*/
-				if ( ! empty( $assoc_args['new_url'] ) ) {
-					$tables_assoc_args['new_url'] = esc_url( $assoc_args['new_url'] );
-					$tables_assoc_args['old_url'] = esc_url( $old_url );
-				}
-
-				WP_CLI::log( __( 'Importing tables...', 'mu-migration' ) );
-
-				/*
-				* If the flag --mysql-single-transaction is passed, then the SQL is wrapped with
-				* START TRANSACTION and COMMIT to insert in one single transaction.
-				*/
-				if ( $assoc_args['mysql-single-transaction'] ) {
-					Helpers\addTransaction( $sql[0] );
-				}
-
-				$this->tables( array( $sql[0] ), $tables_assoc_args, $verbose );
-
-				$map_file = $temp_dir . '/users_map.json';
-
-				$users_assoc_args = array(
-					'map_file' => $map_file,
-					'blog_id'  => $blog_id,
-				);
-
-				WP_CLI::log( __( 'Moving files...', 'mu-migration' ) );
-
-				if ( ! empty( $plugins_folder ) ) {
-					$blog_plugins 		= isset( $site_meta_data->blog_plugins ) ? (array) $site_meta_data->blog_plugins : false;
-					$network_plugins 	= isset( $site_meta_data->network_plugins ) ? array_keys( (array) $site_meta_data->network_plugins ) : false;
-					$this->move_and_activate_plugins( $plugins_folder[0], (array) $site_meta_data->plugins, $blog_plugins, $network_plugins );
-				}
-
-				if ( ! empty( $uploads_folder ) ) {
-					$this->move_uploads( $uploads_folder[0], $blog_id );
-				}
-
-				if ( ! empty( $themes_folder ) ) {
-					$this->move_themes( $themes_folder[0] );
-				}
-
-				WP_CLI::log( __( 'Importing Users...', 'mu-migration' ) );
-
-				$this->users( array( $users[0] ), $users_assoc_args, $verbose );
-
-				if ( file_exists( $map_file ) ) {
-					$postsCommand = new PostsCommand();
-
-					$postsCommand->update_author(
-						array( $map_file ),
-						array(
-							'blog_id' => $blog_id,
-						),
-						$verbose
+			if ( $from && $to ) {
+				$check = 0;
+				// Two step search and replace will prevent any weirdness if one of the from paths is a subset of the two path
+				foreach ( $from as $f ) {
+					$search_replace = \WP_CLI::launch_self(
+						'search-replace',
+						array( $f , "{{{mu-migration-upload-paths-placeholder}}}" ),
+						array(),
+						false,
+						false,
+						array( 'url' => $new_url )
 					);
+
+					$check += $search_replace;
 				}
-
-				WP_CLI::log( __( 'Flushing rewrite rules...', 'mu-migration' ) );
-
-				add_action( 'init', function () use ( $blog_id ) {
-					/*
-					* Flush the rewrite rules for the newly created site, just in case.
-					*/
-					Helpers\maybe_switch_to_blog( $blog_id );
-					flush_rewrite_rules();
-					Helpers\maybe_restore_current_blog();
-				}, 9999 );
-
-				WP_CLI::log( __( 'Removing temporary files....', 'mu-migration' ) );
-
-				Helpers\delete_folder( $temp_dir );
-
-				WP_CLI::success( sprintf(
-					__( 'All done, your new site is available at %s. Remember to flush the cache (memcache, redis etc).', 'mu-migration' ),
-					esc_url( $site_meta_data->url )
-					) );
-
+				$search_replace = \WP_CLI::launch_self(
+					'search-replace',
+					array( "{{{mu-migration-upload-paths-placeholder}}}", $to ),
+					array(),
+					false,
+					false,
+					array( 'url' => $new_url )
+				);
+				$check += $search_replace;
+				// Restore the upload path(s).
+				foreach ( $upload_path_options as $op ) {
+					$restore = \WP_CLI::launch_self(
+						'option update',
+						array(
+							$op,
+							$this->new_upload_paths[ $op ],
+						),
+						array(),
+						false,
+						false,
+						array( 'url' => $new_url )
+					);
+					$check += $restore;
+					$temp = $this->new_upload_paths[ $op ];
 				}
-
-				/**
-				* Moves the plugins to the right location.
-				*
-				* @param string $plugins_dir
-				* @param array|bool $blog_plguins
-				* @param array|bool $network_plugins
-				*/
-				private function move_and_activate_plugins( $plugins_dir, $plugins, $blog_plugins, $network_plugins ) {
-					if ( file_exists( $plugins_dir ) ) {
-						WP_CLI::log( __( 'Moving Plugins...', 'mu-migration' ) );
-						$installed_plugins = WP_PLUGIN_DIR;
-						$check_plugins 	   = false !== $blog_plugins && false !== $network_plugins;
-						foreach ( $plugins as $plugin_name => $plugin ) {
-							$plugin_folder = dirname( $plugin_name );
-							$fullPluginPath = $plugins_dir . '/' . $plugin_folder;
-
-							if ( $check_plugins &&  ! in_array( $plugin_name, $blog_plugins, true ) &&
-							! in_array( $plugin_name, $network_plugins, true ) ) {
-								continue;
-							}
-
-							if ( ! file_exists( $installed_plugins . '/' . $plugin_folder ) ) {
-								WP_CLI::log( sprintf( __( 'Moving %s to plugins folder' ), $plugin_name ) );
-								rename( $fullPluginPath, $installed_plugins . '/' . $plugin_folder );
-							}
-
-							if ( $check_plugins && in_array( $plugin_name, $blog_plugins, true ) ) {
-								WP_CLI::log( sprintf( __( 'Activating plugin: %s ' ), $plugin_name ) );
-								activate_plugin( $installed_plugins . '/' . $plugin_name  );
-							} else if ( $check_plugins && in_array( $plugin_name, $network_plugins, true ) ) {
-								WP_CLI::log( sprintf( __( 'Activating plugin network-wide: %s ' ), $plugin_name ) );
-								activate_plugin( $installed_plugins . '/' . $plugin_name , '', true );
-							}
-						}
+				if ( 0 === $check ) {
+					$this->log( __( 'Uploads paths have been successfully updated as follows:', 'mu-migration' ), true );
+					foreach ( $from as $f ) {
+						$this->log( sprintf( __( '%s  ->  %s', 'mu-migration' ), $f, $to ), true );
 					}
 				}
+			}
 
-				/**
-				* Moves the uploads folder to the right location.
-				*
-				* @param string $uploads_dir
-				* @param int    $blog_id
-				*/
-				private function move_uploads( $uploads_dir, $blog_id ) {
-					if ( file_exists( $uploads_dir ) ) {
-						\WP_CLI::log( __( 'Moving Uploads...', 'mu-migration' ) );
-						Helpers\maybe_switch_to_blog( $blog_id );
-						$dest_uploads_dir = wp_upload_dir();
-						Helpers\maybe_restore_current_blog();
+			Helpers\maybe_switch_to_blog( (int) $this->assoc_args['blog_id'] );
 
-						Helpers\move_folder( $uploads_dir, $dest_uploads_dir['basedir'] );
-					}
+			// Update the new tables to work properly with multisite.
+			$new_wp_roles_option_key = $wpdb->prefix . 'user_roles';
+			$old_wp_roles_option_key = $this->assoc_args['old_prefix'] . 'user_roles';
+
+			// Updating user_roles option key.
+			$wpdb->update(
+				$wpdb->options,
+				array(
+					'option_name' => $new_wp_roles_option_key,
+				),
+				array(
+					'option_name' => $old_wp_roles_option_key,
+				),
+				array(
+					'%s',
+				),
+				array(
+					'%s',
+				)
+			);
+
+			Helpers\maybe_restore_current_blog();
+		}
+	}
+
+	/**
+	 * Imports a new site into multisite from a zip package.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <file>
+	 * : The name of the exported .zip file
+	 *
+	 * ## EXAMPLES
+	 *
+	 *      wp mu-migration import all site.zip
+	 *
+	 * @synopsis <zipfile> [--blog_id=<blog_id>] [--new_url=<new_url>] [--verbose] [--mysql-single-transaction]
+	 *
+	 * @param array $args
+	 * @param array $assoc_args
+	 */
+	public function all( $args = array(), $assoc_args = array() ) {
+		$this->process_args(
+			array(),
+			$args,
+			array(
+				'blog_id'                  => '',
+				'new_url'                  => '',
+				'mysql-single-transaction' => false,
+			),
+			$assoc_args
+		);
+
+		$is_multisite = is_multisite();
+
+		$verbose = false;
+
+		if ( isset( $assoc_args['verbose'] ) ) {
+			$verbose = true;
+		}
+
+		$assoc_args = $this->assoc_args;
+
+		$filename = $this->args[0];
+
+		if ( ! Helpers\is_zip_file( $filename ) ) {
+			WP_CLI::error( __( 'The provided file does not appear to be a zip file', 'mu-migration' ) );
+		}
+
+		$temp_dir = 'mu-migration' . time() . '/';
+
+		WP_CLI::log( __( 'Extracting zip package...', 'mu-migration' ) );
+
+		/*
+		 * Extract the file to the $temp_dir
+		 */
+		Helpers\extract( $filename, $temp_dir );
+
+		/*
+		 * Looks for required (.json, .csv and .sql) files and for the optional folders
+		 * that can live in the zip package (plugins, themes and uploads).
+		 */
+		$site_meta_data = glob( $temp_dir . '/*.json' );
+		$users          = glob( $temp_dir . '/*.csv' );
+		$sql            = glob( $temp_dir . '/*.sql' );
+		$plugins_folder = glob( $temp_dir . '/wp-content/plugins' );
+		$themes_folder  = glob( $temp_dir . '/wp-content/themes' );
+		$uploads_folder = glob( $temp_dir . '/wp-content/uploads' );
+
+		if ( empty( $site_meta_data ) || empty( $users ) || empty( $sql ) ) {
+			WP_CLI::error( __( "There's something wrong with your zip package, unable to find required files", 'mu-migration' ) );
+		}
+
+		$site_meta_data = json_decode( file_get_contents( $site_meta_data[0] ) );
+
+		$old_url = $site_meta_data->url;
+		$new_url = $old_url;
+
+		if ( ! empty( $assoc_args['new_url'] ) ) {
+			$site_meta_data->url = $assoc_args['new_url'];
+			$new_url = $assoc_args['new_url'];
+		}
+
+		if ( empty( $assoc_args['blog_id'] ) && $is_multisite ) {
+			$blog_id = $this->create_new_site( $site_meta_data );
+		} else if ( $is_multisite ) {
+			$blog_id = (int) $assoc_args['blog_id'];
+		} else {
+			$blog_id = 1;
+		}
+
+		if ( ! $blog_id ) {
+			WP_CLI::error( __( 'Unable to create new site', 'mu-migration' ) );
+		}
+
+		$tables_assoc_args = array(
+			'blog_id'          => $blog_id,
+			'original_blog_id' => $site_meta_data->blog_id,
+			'old_prefix'       => $site_meta_data->db_prefix,
+			'new_prefix'       => Helpers\get_db_prefix( $blog_id ),
+		);
+
+		/*
+		 * If changing URL, then set the proper params to force search-replace in the tables method.
+		 */
+		if ( ! empty( $assoc_args['new_url'] ) ) {
+			$tables_assoc_args['new_url'] = esc_url( $assoc_args['new_url'] );
+			$tables_assoc_args['old_url'] = esc_url( $old_url );
+		}
+
+		WP_CLI::log( __( 'Importing tables...', 'mu-migration' ) );
+
+		/*
+		 * If the flag --mysql-single-transaction is passed, then the SQL is wrapped with
+		 * START TRANSACTION and COMMIT to insert in one single transaction.
+		 */
+		if ( $assoc_args['mysql-single-transaction'] ) {
+			Helpers\addTransaction( $sql[0] );
+		}
+
+		$this->tables( array( $sql[0] ), $tables_assoc_args, $verbose );
+
+		$map_file = $temp_dir . '/users_map.json';
+
+		$users_assoc_args = array(
+			'map_file' => $map_file,
+			'blog_id'  => $blog_id,
+		);
+
+		WP_CLI::log( __( 'Moving files...', 'mu-migration' ) );
+
+		if ( ! empty( $plugins_folder ) ) {
+			$blog_plugins 		= isset( $site_meta_data->blog_plugins ) ? (array) $site_meta_data->blog_plugins : false;
+			$network_plugins 	= isset( $site_meta_data->network_plugins ) ? array_keys( (array) $site_meta_data->network_plugins ) : false;
+			$this->move_and_activate_plugins( $plugins_folder[0], (array) $site_meta_data->plugins, $blog_plugins, $network_plugins );
+		}
+
+		if ( ! empty( $uploads_folder ) ) {
+			$this->move_uploads( $uploads_folder[0], $blog_id );
+		}
+
+		if ( ! empty( $themes_folder ) ) {
+			$this->move_themes( $themes_folder[0] );
+		}
+
+		WP_CLI::log( __( 'Importing Users...', 'mu-migration' ) );
+
+		$this->users( array( $users[0] ), $users_assoc_args, $verbose );
+
+		if ( file_exists( $map_file ) ) {
+			$postsCommand = new PostsCommand();
+
+			$postsCommand->update_author(
+				array( $map_file ),
+				array(
+					'blog_id' => $blog_id,
+				),
+				$verbose
+			);
+		}
+
+		WP_CLI::log( __( 'Flushing rewrite rules...', 'mu-migration' ) );
+
+		add_action( 'init', function () use ( $blog_id ) {
+			/*
+			 * Flush the rewrite rules for the newly created site, just in case.
+			 */
+			Helpers\maybe_switch_to_blog( $blog_id );
+			flush_rewrite_rules();
+			Helpers\maybe_restore_current_blog();
+		}, 9999 );
+
+		WP_CLI::log( __( 'Removing temporary files....', 'mu-migration' ) );
+
+		Helpers\delete_folder( $temp_dir );
+
+		WP_CLI::success( sprintf(
+			__( 'All done, your new site is available at %s. Remember to flush the cache (memcache, redis etc).', 'mu-migration' ),
+			esc_url( $site_meta_data->url )
+		) );
+
+	}
+
+	/**
+	 * Moves the plugins to the right location.
+	 *
+	 * @param string $plugins_dir
+	 * @param array|bool $blog_plguins
+	 * @param array|bool $network_plugins
+	 */
+	private function move_and_activate_plugins( $plugins_dir, $plugins, $blog_plugins, $network_plugins ) {
+		if ( file_exists( $plugins_dir ) ) {
+			WP_CLI::log( __( 'Moving Plugins...', 'mu-migration' ) );
+			$installed_plugins = WP_PLUGIN_DIR;
+			$check_plugins 	   = false !== $blog_plugins && false !== $network_plugins;
+			foreach ( $plugins as $plugin_name => $plugin ) {
+				$plugin_folder = dirname( $plugin_name );
+				$fullPluginPath = $plugins_dir . '/' . $plugin_folder;
+
+				if ( $check_plugins &&  ! in_array( $plugin_name, $blog_plugins, true ) &&
+					! in_array( $plugin_name, $network_plugins, true ) ) {
+					continue;
 				}
 
-				/**
-				* Moves the themes to the right location.
-				*
-				* @param string $themes_dir
-				*/
-				private function move_themes( $themes_dir ) {
-					if ( file_exists( $themes_dir ) ) {
-						WP_CLI::log( __( 'Moving Themes...', 'mu-migration' ) );
-						$themes           = new \DirectoryIterator( $themes_dir );
-						$installed_themes = get_theme_root();
+				if ( ! file_exists( $installed_plugins . '/' . $plugin_folder ) ) {
+					WP_CLI::log( sprintf( __( 'Moving %s to plugins folder' ), $plugin_name ) );
+					rename( $fullPluginPath, $installed_plugins . '/' . $plugin_folder );
+				}
 
-						foreach ( $themes as $theme ) {
-							if ( $theme->isDir() ) {
-								$fullPluginPath = $themes_dir . '/' . $theme->getFilename();
+				if ( $check_plugins && in_array( $plugin_name, $blog_plugins, true ) ) {
+					WP_CLI::log( sprintf( __( 'Activating plugin: %s ' ), $plugin_name ) );
+					activate_plugin( $installed_plugins . '/' . $plugin_name  );
+				} else if ( $check_plugins && in_array( $plugin_name, $network_plugins, true ) ) {
+					WP_CLI::log( sprintf( __( 'Activating plugin network-wide: %s ' ), $plugin_name ) );
+					activate_plugin( $installed_plugins . '/' . $plugin_name , '', true );
+				}
+			}
+		}
+	}
 
-								if ( ! file_exists( $installed_themes . '/' . $theme->getFilename() ) ) {
-									WP_CLI::log( sprintf( __( 'Moving %s to themes folder' ), $theme->getFilename() ) );
-									rename( $fullPluginPath, $installed_themes . '/' . $theme->getFilename() );
+	/**
+	 * Moves the uploads folder to the right location.
+	 *
+	 * @param string $uploads_dir
+	 * @param int    $blog_id
+	 */
+	private function move_uploads( $uploads_dir, $blog_id ) {
+		if ( file_exists( $uploads_dir ) ) {
+			\WP_CLI::log( __( 'Moving Uploads...', 'mu-migration' ) );
+			Helpers\maybe_switch_to_blog( $blog_id );
+			$dest_uploads_dir = wp_upload_dir();
+			Helpers\maybe_restore_current_blog();
 
-									WP_CLI::launch_self(
-										'theme enable',
-										array( $theme->getFilename() ),
-										array(),
-										false,
-										false,
-										array()
-									);
-								}
-							}
-						}
+			Helpers\move_folder( $uploads_dir, $dest_uploads_dir['basedir'] );
+		}
+	}
+
+	/**
+	 * Moves the themes to the right location.
+	 *
+	 * @param string $themes_dir
+	 */
+	private function move_themes( $themes_dir ) {
+		if ( file_exists( $themes_dir ) ) {
+			WP_CLI::log( __( 'Moving Themes...', 'mu-migration' ) );
+			$themes           = new \DirectoryIterator( $themes_dir );
+			$installed_themes = get_theme_root();
+
+			foreach ( $themes as $theme ) {
+				if ( $theme->isDir() ) {
+					$fullPluginPath = $themes_dir . '/' . $theme->getFilename();
+
+					if ( ! file_exists( $installed_themes . '/' . $theme->getFilename() ) ) {
+						WP_CLI::log( sprintf( __( 'Moving %s to themes folder' ), $theme->getFilename() ) );
+						rename( $fullPluginPath, $installed_themes . '/' . $theme->getFilename() );
+
+						WP_CLI::launch_self(
+							'theme enable',
+							array( $theme->getFilename() ),
+							array(),
+							false,
+							false,
+							array()
+						);
 					}
 				}
+			}
+		}
+	}
 
 	/**
 	 * Creates a new site within multisite.
@@ -702,133 +702,133 @@ class ImportCommand extends MUMigrationBase {
 			return false;
 		}
 
-          $blog_id = wpmu_create_blog( $parsed_url['host'], $parsed_url['path'], 'Temporary Title', 0);
+		$blog_id = wpmu_create_blog( $parsed_url['host'], $parsed_url['path'], 'Temporary Title', 0);
 
-					if ( ! $blog_id ) {
-						return false;
-					}
+		if ( ! $blog_id ) {
+			return false;
+		}
 
-					return $blog_id;
-				}
+		return $blog_id;
+	}
 
-				/**
-				* Replaces the db_prefix with a new one using sed.
-				*
-				* @param string $filename      The filename of the sql file to which the db prefix should be replaced.
-				* @param string $old_db_prefix The db prefix to be replaced.
-				* @param string $new_db_prefix The new db prefix.
-				*/
-				private function replace_db_prefix( $filename, $old_db_prefix, $new_db_prefix ) {
-					$new_prefix = $new_db_prefix;
+	/**
+	 * Replaces the db_prefix with a new one using sed.
+	 *
+	 * @param string $filename      The filename of the sql file to which the db prefix should be replaced.
+	 * @param string $old_db_prefix The db prefix to be replaced.
+	 * @param string $new_db_prefix The new db prefix.
+	 */
+	private function replace_db_prefix( $filename, $old_db_prefix, $new_db_prefix ) {
+		$new_prefix = $new_db_prefix;
 
-					if ( ! empty( $new_prefix ) ) {
-						$mysql_chunks_regex = array(
-							'DROP TABLE IF EXISTS',
-							'CREATE TABLE',
-							'LOCK TABLES',
-							'INSERT INTO',
-							'CREATE TABLE IF NOT EXISTS',
-							'ALTER TABLE',
-						);
+		if ( ! empty( $new_prefix ) ) {
+			$mysql_chunks_regex = array(
+				'DROP TABLE IF EXISTS',
+				'CREATE TABLE',
+				'LOCK TABLES',
+				'INSERT INTO',
+				'CREATE TABLE IF NOT EXISTS',
+				'ALTER TABLE',
+			);
 
-						//build sed expressions
-						$sed_commands = array();
-						foreach ( $mysql_chunks_regex as $regex ) {
-							$sed_commands[] = "s/{$regex} `{$old_db_prefix}/{$regex} `{$new_prefix}/g";
-						}
-
-						foreach ( $sed_commands as $sed_command ) {
-							$full_command = "sed '$sed_command' -i $filename";
-							$sed_result   = \WP_CLI::launch( $full_command, false, false );
-
-							if ( 0 !== $sed_result ) {
-								\WP_CLI::warning( __( 'Something went wrong while running sed', 'mu-migration' ) );
-							}
-						}
-					}
-				}
-
-				/**
-				* Checks whether sed is available or not.
-				*
-				* @param bool $exit_on_error If set to true the script will be terminated if sed is not available.
-				* @return bool
-				*/
-				private function check_for_sed_presence( $exit_on_error = false ) {
-					$sed = \WP_CLI::launch( 'sed --version', false, false );
-
-					if ( 0 !== $sed ) {
-						if ( $exit_on_error ) {
-							\WP_CLI::error( __( 'sed not present, please install sed', 'mu-migration' ) );
-						}
-
-						return false;
-					}
-
-					return true;
-				}
-
-				private function get_old_upload_paths( $upload_path_options, $original_blog_id, $blog_id ) {
-          Helpers\maybe_switch_to_blog( $blog_id );
-					$from = array();
-					$homepath = get_option( 'home' );
-					// There are several settings that affect upload pathing.
-					// The below array should list them in order of use priority.
-
-					foreach ( $upload_path_options as $op ) {
-						// Get the value of the option.
-						$path = get_option( $op );
-
-						// Normalize path structure and add to 'from' array.
-						if ( is_string( $path ) && $path != '' ) {
-							$from[] = $path;
-						}
-					}
-
-					$from[] = wp_get_upload_dir()['baseurl'];
-					$from[] = $homepath . '/files/';
-
-					// In case everything else fails, at least take a stab at it.
-					$from[] = $homepath . "/wp-content/uploads/sites/" . $original_blog_id;
-
-					foreach ( $from as $i => $path ) {
-						if ( ! preg_match( '/^http(s?):\/\//', $path ) ) {
-							$path = preg_replace( '/^([^\/])/', '/$1', $path );
-							$path = "$homepath$path";
-						}
-						$path = preg_replace( '/([^\/])$/', '$1/', $path );
-            $path = preg_replace( '/^http(s?):\/\//', '', $path );
-						$from[ $i ] = $path;
-					}
-
-					usort( $from, function ( $a, $b ) {
-							return strlen( $b ) - strlen( $a );
-						}
-					);
-          Helpers\maybe_restore_current_blog();
-					return $from;
-				}
-
-				private function get_new_upload_path( $home_path, $blog_id ) {
-					if ( ! ( property_exists( $this, 'new_upload_paths' ) && is_array( $this->new_upload_paths ) ) ) {
-						return false;
-					}
-
-					$to = $home_path . 'wp-content/uploads/sites/' . $blog_id;
-					foreach ( $this->new_upload_paths as $path ) {
-						// Use the highest priority possibility which has a value as the 'to' pattern.
-						if ( is_string( $path ) && $path != '' ) {
-							if ( ! preg_match( '/^http(s?):\/\//', $path ) ) {
-								$path = preg_replace( '/^([^\/])/', '/$1', $path );
-								$path = $home_path . $path;
-							}
-							$path = preg_replace( '/([^\/])$/', '$1/', $path );
-              $path = preg_replace( '/^http(s?):\/\//', '', $path );
-							return $path;
-						}
-					}
-					return $to;
-				}
+			//build sed expressions
+			$sed_commands = array();
+			foreach ( $mysql_chunks_regex as $regex ) {
+				$sed_commands[] = "s/{$regex} `{$old_db_prefix}/{$regex} `{$new_prefix}/g";
 			}
 
-			WP_CLI::add_command( 'mu-migration import', __NAMESPACE__ . '\\ImportCommand' );
+			foreach ( $sed_commands as $sed_command ) {
+				$full_command = "sed '$sed_command' -i $filename";
+				$sed_result   = \WP_CLI::launch( $full_command, false, false );
+
+				if ( 0 !== $sed_result ) {
+					\WP_CLI::warning( __( 'Something went wrong while running sed', 'mu-migration' ) );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Checks whether sed is available or not.
+	 *
+	 * @param bool $exit_on_error If set to true the script will be terminated if sed is not available.
+	 * @return bool
+	 */
+	private function check_for_sed_presence( $exit_on_error = false ) {
+		$sed = \WP_CLI::launch( 'sed --version', false, false );
+
+		if ( 0 !== $sed ) {
+			if ( $exit_on_error ) {
+				\WP_CLI::error( __( 'sed not present, please install sed', 'mu-migration' ) );
+			}
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function get_old_upload_paths( $upload_path_options, $original_blog_id, $blog_id ) {
+    Helpers\maybe_switch_to_blog( $blog_id );
+		$from = array();
+		$homepath = get_option( 'home' );
+		// There are several settings that affect upload pathing.
+		// The below array should list them in order of use priority.
+
+		foreach ( $upload_path_options as $op ) {
+			// Get the value of the option.
+			$path = get_option( $op );
+
+			// Normalize path structure and add to 'from' array.
+			if ( is_string( $path ) && $path != '' ) {
+				$from[] = $path;
+			}
+		}
+
+		$from[] = wp_get_upload_dir()['baseurl'];
+		$from[] = $homepath . '/files/';
+
+		// In case everything else fails, at least take a stab at it.
+		$from[] = $homepath . "/wp-content/uploads/sites/" . $original_blog_id;
+
+		foreach ( $from as $i => $path ) {
+			if ( ! preg_match( '/^http(s?):\/\//', $path ) ) {
+				$path = preg_replace( '/^([^\/])/', '/$1', $path );
+				$path = "$homepath$path";
+			}
+			$path = preg_replace( '/([^\/])$/', '$1/', $path );
+      $path = preg_replace( '/^http(s?):\/\//', '', $path );
+			$from[ $i ] = $path;
+		}
+
+		usort( $from, function ( $a, $b ) {
+				return strlen( $b ) - strlen( $a );
+			}
+		);
+    Helpers\maybe_restore_current_blog();
+		return $from;
+	}
+
+	private function get_new_upload_path( $home_path, $blog_id ) {
+		if ( ! ( property_exists( $this, 'new_upload_paths' ) && is_array( $this->new_upload_paths ) ) ) {
+			return false;
+		}
+
+		$to = $home_path . 'wp-content/uploads/sites/' . $blog_id;
+		foreach ( $this->new_upload_paths as $path ) {
+			// Use the highest priority possibility which has a value as the 'to' pattern.
+			if ( is_string( $path ) && $path != '' ) {
+				if ( ! preg_match( '/^http(s?):\/\//', $path ) ) {
+					$path = preg_replace( '/^([^\/])/', '/$1', $path );
+					$path = $home_path . $path;
+				}
+				$path = preg_replace( '/([^\/])$/', '$1/', $path );
+        $path = preg_replace( '/^http(s?):\/\//', '', $path );
+				return $path;
+			}
+		}
+		return $to;
+	}
+}
+
+WP_CLI::add_command( 'mu-migration import', __NAMESPACE__ . '\\ImportCommand' );
