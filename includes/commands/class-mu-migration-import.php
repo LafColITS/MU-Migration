@@ -281,12 +281,13 @@ class ImportCommand extends MUMigrationBase {
 
 		// Saving a few things before we do the db import.
 		Helpers\maybe_switch_to_blog( $this->assoc_args['blog_id'] );
-		$this->new_upload_paths = array(
+		$new_upload_paths = array(
 			'upload_path'			=> get_option( 'upload_path' ),
 			'upload_url_path' => get_option( 'upload_url_path' ),
 			'fileupload_url'	=> get_option( 'fileupload_url' ),
 			'upload_baseurl'	=> wp_get_upload_dir()['baseurl'],
 		);
+		$home_path = get_option( 'home' );
 		Helpers\maybe_restore_current_blog();
 
 		// Terminates the script if sed is not installed.
@@ -343,7 +344,7 @@ class ImportCommand extends MUMigrationBase {
 			);
 
 			$from = $this->get_old_upload_paths( $upload_path_options, $this->assoc_args['original_blog_id'], $this->assoc_args['blog_id'] );
-			$to = $this->get_new_upload_path( get_option( 'home' ), $this->assoc_args['blog_id'] );
+			$to = $this->get_new_upload_path( $new_upload_paths, $home_path, $this->assoc_args['blog_id'] );
 
 			if ( $from && $to ) {
 				$check = 0;
@@ -375,7 +376,7 @@ class ImportCommand extends MUMigrationBase {
 						'option update',
 						array(
 							$op,
-							$this->new_upload_paths[ $op ],
+							$new_upload_paths[ $op ],
 						),
 						array(),
 						false,
@@ -383,7 +384,7 @@ class ImportCommand extends MUMigrationBase {
 						array( 'url' => $new_url )
 					);
 					$check += $restore;
-					$temp = $this->new_upload_paths[ $op ];
+					$temp = $new_upload_paths[ $op ];
 				}
 				if ( 0 === $check ) {
 					$this->log( __( 'Uploads paths have been successfully updated as follows:', 'mu-migration' ), true );
@@ -492,11 +493,9 @@ class ImportCommand extends MUMigrationBase {
 		$site_meta_data = json_decode( file_get_contents( $site_meta_data[0] ) );
 
 		$old_url = $site_meta_data->url;
-		$new_url = $old_url;
 
 		if ( ! empty( $assoc_args['new_url'] ) ) {
 			$site_meta_data->url = $assoc_args['new_url'];
-			$new_url = $assoc_args['new_url'];
 		}
 
 		if ( empty( $assoc_args['blog_id'] ) && $is_multisite ) {
@@ -590,7 +589,7 @@ class ImportCommand extends MUMigrationBase {
 
 		WP_CLI::log( __( 'Removing temporary files....', 'mu-migration' ) );
 
-		Helpers\delete_folder( $temp_dir );
+		// Helpers\delete_folder( $temp_dir );
 
 		WP_CLI::success( sprintf(
 			__( 'All done, your new site is available at %s. Remember to flush the cache (memcache, redis etc).', 'mu-migration' ),
@@ -615,7 +614,7 @@ class ImportCommand extends MUMigrationBase {
 				$plugin_folder = dirname( $plugin_name );
 				$fullPluginPath = $plugins_dir . '/' . $plugin_folder;
 
-				if ( $check_plugins &&  ! in_array( $plugin_name, $blog_plugins, true ) && 
+				if ( $check_plugins &&  ! in_array( $plugin_name, $blog_plugins, true ) &&
 					! in_array( $plugin_name, $network_plugins, true ) ) {
 					continue;
 				}
@@ -771,7 +770,7 @@ class ImportCommand extends MUMigrationBase {
 	private function get_old_upload_paths( $upload_path_options, $original_blog_id, $blog_id ) {
     Helpers\maybe_switch_to_blog( $blog_id );
 		$from = array();
-		$homepath = get_option( 'home' );
+		$home_path = get_option( 'home' );
 		// There are several settings that affect upload pathing.
 		// The below array should list them in order of use priority.
 
@@ -786,15 +785,15 @@ class ImportCommand extends MUMigrationBase {
 		}
 
 		$from[] = wp_get_upload_dir()['baseurl'];
-		$from[] = $homepath . '/files/';
+		$from[] = $home_path . '/files/';
 
 		// In case everything else fails, at least take a stab at it.
-		$from[] = $homepath . "/wp-content/uploads/sites/" . $original_blog_id;
+		$from[] = $home_path . "/wp-content/uploads/sites/" . $original_blog_id;
 
 		foreach ( $from as $i => $path ) {
 			if ( ! preg_match( '/^http(s?):\/\//', $path ) ) {
 				$path = preg_replace( '/^([^\/])/', '/$1', $path );
-				$path = "$homepath$path";
+				$path = "$home_path$path";
 			}
 			$path = preg_replace( '/([^\/])$/', '$1/', $path );
       $path = preg_replace( '/^http(s?):\/\//', '', $path );
@@ -809,13 +808,9 @@ class ImportCommand extends MUMigrationBase {
 		return $from;
 	}
 
-	private function get_new_upload_path( $home_path, $blog_id ) {
-		if ( ! ( property_exists( $this, 'new_upload_paths' ) && is_array( $this->new_upload_paths ) ) ) {
-			return false;
-		}
-
+	private function get_new_upload_path( $new_upload_paths, $home_path, $blog_id ) {
 		$to = $home_path . 'wp-content/uploads/sites/' . $blog_id;
-		foreach ( $this->new_upload_paths as $path ) {
+		foreach ( $new_upload_paths as $path ) {
 			// Use the highest priority possibility which has a value as the 'to' pattern.
 			if ( is_string( $path ) && $path != '' ) {
 				if ( ! preg_match( '/^http(s?):\/\//', $path ) ) {
