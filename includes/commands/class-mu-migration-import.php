@@ -768,11 +768,9 @@ class ImportCommand extends MUMigrationBase {
 	}
 
 	private function get_old_upload_paths( $upload_path_options, $original_blog_id, $blog_id ) {
-    Helpers\maybe_switch_to_blog( $blog_id );
+		Helpers\maybe_switch_to_blog( $blog_id );
 		$from = array();
-		$home_path = get_option( 'home' );
-		// There are several settings that affect upload pathing.
-		// The below array should list them in order of use priority.
+		$home_path = get_option( 'home' ); // This should match new_url, which should have already been inserted over top of the old url
 
 		foreach ( $upload_path_options as $op ) {
 			// Get the value of the option.
@@ -788,7 +786,11 @@ class ImportCommand extends MUMigrationBase {
 		$from[] = $home_path . '/files/';
 
 		// In case everything else fails, at least take a stab at it.
-		$from[] = $home_path . "/wp-content/uploads/sites/" . $original_blog_id;
+		if ( ! empty( $original_blog_id ) && $original_blog_id > 1 ) {
+			$from[] = $home_path . "/wp-content/uploads/sites/" . $original_blog_id;
+		} else {
+			$from[] = $home_path . "/wp-content/uploads";
+		}
 
 		foreach ( $from as $i => $path ) {
 			if ( ! preg_match( '/^http(s?):\/\//', $path ) ) {
@@ -796,7 +798,7 @@ class ImportCommand extends MUMigrationBase {
 				$path = "$home_path$path";
 			}
 			$path = preg_replace( '/([^\/])$/', '$1/', $path );
-      $path = preg_replace( '/^http(s?):\/\//', '', $path );
+			$path = preg_replace( '/^http(s?):\/\//', '', $path );
 			$from[ $i ] = $path;
 		}
 
@@ -804,7 +806,7 @@ class ImportCommand extends MUMigrationBase {
 				return strlen( $b ) - strlen( $a );
 			}
 		);
-    Helpers\maybe_restore_current_blog();
+		Helpers\maybe_restore_current_blog();
 		return $from;
 	}
 
