@@ -794,6 +794,10 @@ class ImportCommand extends MUMigrationBase {
 
 		$home_path = $home_path ? $home_path : get_option( 'home' );
 
+		$matches = array();
+		preg_match( '/(https?:\/\/)?(.*?)\/.*/', $home_path, $matches );
+		$site_path = count($matches) > 1 ? $matches[2] : '';
+
 		$from = array();
 
 		foreach ( $upload_path_options as $op ) {
@@ -808,12 +812,15 @@ class ImportCommand extends MUMigrationBase {
 
 		// Add ms-files-rewriting possibilities. (URLs of the form www.example.com/sitename/files)
 		$from[] = $home_path ? $home_path . '/files/' : '';
+		$from[] = $site_path ? $site_path . '/files/' : '';
 
 		// In case everything else fails, hard code some possibilities.
 		if ( ! empty( $original_blog_id ) && $original_blog_id > 1 ) {
 			$from[] = $home_path ? $home_path . "/wp-content/uploads/sites/" . $original_blog_id : '';
+			$from[] = $site_path ? $site_path . "/wp-content/uploads/sites/" . $original_blog_id : '';
 		} else {
 			$from[] = $home_path ? $home_path . "/wp-content/uploads" : '';
+			$from[] = $site_path ? $site_path . "/wp-content/uploads" : '';
 		}
 
 		// Normalize all paths into the form {base_url}/{path}/
@@ -822,13 +829,21 @@ class ImportCommand extends MUMigrationBase {
 			if ( empty( $path ) ) {
 				continue;
 			}
-			if ( strpos( $path, $home_path ) !== 0 && ! preg_match( '/^http(s?):\/\//', $path ) ) {
+			if ( strpos( $path, $site_path ) !== 0 && ! preg_match( '/^http(s?):\/\//', $path ) ) {
 				$path = preg_replace( '/^([^\/])/', '/$1', $path );
-				$path = $home_path . $path;
+				$paths = array();
+				$paths[] = $home_path . $path;
+				$paths[] = $site_path . $path;
+				foreach ( $paths as $p ) {
+					$p = preg_replace( '/([^\/])$/', '$1/', $p );
+					$p = preg_replace( '/^http(s?):\/\//', '', $p );
+					$final_from[] = $p;
+				}
+			} else {
+				$path = preg_replace( '/([^\/])$/', '$1/', $path );
+				$path = preg_replace( '/^http(s?):\/\//', '', $path );
+				$final_from[] = $path;
 			}
-			$path = preg_replace( '/([^\/])$/', '$1/', $path );
-			$path = preg_replace( '/^http(s?):\/\//', '', $path );
-			$final_from[] = $path;
 		}
 
 		// Sort by length desc to prevent substring conflicts.
