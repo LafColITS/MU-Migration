@@ -829,7 +829,8 @@ class ImportCommand extends MUMigrationBase {
 			if ( empty( $path ) ) {
 				continue;
 			}
-			if ( strpos( $path, $site_path ) !== 0 && ! preg_match( '/^http(s?):\/\//', $path ) ) {
+			$url_check = $site_path ? $site_path : $home_path;
+			if ( strpos( $path, $url_check ) !== 0 && ! preg_match( '/^http(s?):\/\//', $path ) ) {
 				$path = preg_replace( '/^([^\/])/', '/$1', $path );
 				$paths = array();
 				$paths[] = $home_path . $path;
