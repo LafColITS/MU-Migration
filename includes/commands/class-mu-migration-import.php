@@ -833,9 +833,9 @@ class ImportCommand extends MUMigrationBase {
 			// Check if this is a relative path.
 			// Add it to the 'from' array accordingly.
 			$url_check = $site_path ? $site_path : $home_path;
-			if ( strpos( $path, $url_check ) !== 0 ) {
+			if ( strpos( $path, $url_check ) !== 0 && ! preg_match( '/^https?:\/\//', $path ) ) {
 				// For relative paths.
-				$path = leadingslashit( $path );
+				$path = preg_replace( '/^([^\/])/', '/$1', $path ); // Add leading slash
 				$paths = array();
 				$paths[] = untrailingslashit( $home_path ) . $path;
 				$paths[] = untrailingslashit( $site_path ) . $path;
@@ -868,12 +868,15 @@ class ImportCommand extends MUMigrationBase {
 	 * We cannot say for certain that this will match the system path the upload files are moved to -- some sites use .htaccess
 	 * rewriting. For example, older sites will almost certainly have ms_files_rewriting enabled (/files/ path).
 	 *
-	 * @param array $possibliities An array of config option values to check. Must be in order of use priority.
+	 * @param array $possibilities An array of config option values to check. Must be in order of use priority.
 	 * @param string $home_path The url of the site -- should be the new url that we want the site to live at.
 	 * @param int $blog_id The blog id of the new incarnation of the site we're importing. Used to take a hard-coded guess
 	 * at the 'to' path as a default if everything else fails.
 	 */
 	private function resolve_upload_path( $possibilities, $home_path, $blog_id ) {
+		$home_path = $home_path ? $home_path : get_option('home');
+		$home_path = Helpers\parse_url_for_search_replace( $home_path );
+
 		// Hard code default in case nothing else works.
 		if ( ! empty( $blog_id ) && $blog_id > 1 ) {
 			$to = $home_path . 'wp-content/uploads/sites/' . $blog_id;
@@ -882,14 +885,13 @@ class ImportCommand extends MUMigrationBase {
 		}
 		// Use the highest priority possibility which has a value.
 		foreach ( $possibilities as $path ) {
-			if ( is_string( $path ) && $path != '' ) {
-				if ( strpos( $path, $home_path ) !== 0 && ! preg_match( '/^http(s?):\/\//', $path ) ) {
-					$path = preg_replace( '/^([^\/])/', '/$1', $path );
-					$path = $home_path . $path;
+			if ( ! empty( $path ) ) {
+				if ( strpos( $path, $home_path ) !== 0 && ! preg_match( '/^https?:\/\//', $path ) ) {
+					$path = preg_replace( '/^([^\/])/', '/$1', $path ); // Add leading slash
+					$path = untrailingslashit($home_path) . $path;
 				}
-				$path = preg_replace( '/([^\/])$/', '$1/', $path );
-				$path = preg_replace( '/^http(s?):\/\//', '', $path );
-				return $path;
+				$path = trailingslashit( $path );
+				return  Helpers\parse_url_for_search_replace( $path );
 			}
 		}
 		return $to;
