@@ -277,8 +277,6 @@ class ImportCommand extends MUMigrationBase {
 			$assoc_args
 		);
 
-		$is_multisite = is_multisite();
-
 		$filename = $this->args[0];
 
 		if ( empty( $filename ) || ! file_exists( $filename ) ) {
@@ -311,16 +309,9 @@ class ImportCommand extends MUMigrationBase {
 			$this->replace_db_prefix( $filename, $this->assoc_args['old_prefix'], $this->assoc_args['new_prefix'] );
 		}
 
-		$import = \WP_CLI::launch_self(
-			'db import',
-			array( $filename ),
-			array(),
-			false,
-			false,
-			array()
-		);
+		$import = Helpers\runcommand( 'db import', [ $filename ] );
 
-		if ( 0 === $import ) {
+		if ( 0 === $import->return_code ) {
 			$this->log( __( 'Database imported', 'mu-migration' ), $verbose );
 
 			$old_url = Helpers\parse_url_for_search_replace( $this->assoc_args['old_url'] );
@@ -691,14 +682,7 @@ class ImportCommand extends MUMigrationBase {
 						WP_CLI::log( sprintf( __( 'Moving %s to themes folder' ), $theme->getFilename() ) );
 						rename( $fullPluginPath, $installed_themes . '/' . $theme->getFilename() );
 
-						WP_CLI::launch_self(
-							'theme enable',
-							array( $theme->getFilename() ),
-							array(),
-							false,
-							false,
-							array()
-						);
+						Helpers\runcommand( 'theme enable', [ $theme->getFilename() ] );
 					}
 				}
 			}
@@ -748,6 +732,8 @@ class ImportCommand extends MUMigrationBase {
 				'INSERT INTO',
 				'CREATE TABLE IF NOT EXISTS',
 				'ALTER TABLE',
+				'CONSTRAINT',
+				'REFERENCES',
 			);
 
 			//build sed expressions
@@ -865,7 +851,7 @@ class ImportCommand extends MUMigrationBase {
 				} else if ( strpos( $path, $site_path !== 0 ) && ! empty( $site_path ) ) {
 					$relative = str_replace( $site_path, '', $path );
 				}
-				
+
 				if ( $relative && preg_match( '/\/.*?\/.*?\/', $relative ) ) { // If relative path is long/complex enough to be safely unique.
 					$relative = ltrim( $path, '/' ); // Remove leading slash for standalone relative version.
 					$final_from[] = array( 'type' => 'relative', 'value' => $relative );
@@ -882,7 +868,7 @@ class ImportCommand extends MUMigrationBase {
 			}
 		);
 		Helpers\maybe_restore_current_blog();
-		
+
 		// Remove duplicates.
 		$temp = array_unique( array_column( $final_from, 'value' ) );
 		return array_intersect_key( $final_from, $temp );
@@ -901,7 +887,7 @@ class ImportCommand extends MUMigrationBase {
 	private function resolve_upload_path( $possibilities, $home_path, $blog_id ) {
 		$home_path = $home_path ? $home_path : get_option('home');
 		$home_path = Helpers\parse_url_for_search_replace( $home_path );
-		
+
 		$to = array();
 
 		// Hard code default in case nothing else works.
@@ -912,7 +898,7 @@ class ImportCommand extends MUMigrationBase {
 			$to['absolute'] = $home_path . 'wp-content/uploads/';
 			$to['relative'] = 'wp-content/uploads/';
 		}
-		
+
 		// Use the highest priority possibility which has a value.
 		$path = "";
 		foreach ( $possibilities as $p ) {
@@ -921,7 +907,7 @@ class ImportCommand extends MUMigrationBase {
 			}
 			$path = $p;
 		}
-		
+
 		// Now do some normalization and split into absolute and relative options.
 		if ( strpos( $path, $home_path ) !== 0 && ! preg_match( '/^https?:\/\//', $path ) ) {
 			// If the base value appears to be a relative path...
